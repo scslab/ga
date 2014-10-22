@@ -13,7 +13,7 @@ bindir="$keydir/bin"
 usage() {
     echo "usage: $prog service        # get token for service" >&2
     echo "usage: $prog -c service     # record seed for new service" >&2
-    echo "usage: $prog -l" >&2
+    echo "usage: $prog -l             # list services setup" >&2
     exit 1
 }
 

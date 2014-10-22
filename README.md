@@ -16,6 +16,12 @@ This library is BSD-licensed.
 Just install on your path both files. If google-auth-code.c is
 uncompiled, then `ga` knows how to compile it on-demmand.
 
+## Using
+
+usage: gaa service        # get token for service
+usage: gaa -c service     # record seed for new service
+usage: gaa -l             # list services setup
+
 ## Get involved!
 
 We are happy to receive bug reports, fixes, documentation enhancements,
