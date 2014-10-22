@@ -3,6 +3,10 @@
 This give you a command to generate two factor authentication codes
 that are compatible with Google Authenticator from the shell.
 
+## References
+
+[RFC6238](https://tools.ietf.org/html/rfc6238)
+
 ## Licensing
 
 This library is BSD-licensed.
@@ -26,6 +30,5 @@ Master [git repository](http://github.com/scslab/ga):
 
 ## Authors
 
-This library is written by David Mazieres <dm@uun.org> and maintained
-by David Terei <code@davidterei.com>.
+This library is written by David Mazieres <dm@uun.org>.
 
