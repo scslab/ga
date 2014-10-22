@@ -1,13 +1,18 @@
 #!/bin/sh
 
+# Copyright 2014 David Mazieres.  You may use and distribute this code
+# under the terms of the GPLv3 or later, and additionally you may link
+# against openssl libcrypto.
+
 exe=google-auth-code
 suffix=$(uname -sm | sed -e 's/ /-/g')
 prog=$(basename $0)
 keydir="${XDG_CONFIG_HOME-${HOME}/.config}/ga"
+bindir="$keydir/bin"
 
 usage() {
-    echo "usage: $prog service" >&2
-    echo "usage: $prog -c service" >&2
+    echo "usage: $prog service        # get token for service" >&2
+    echo "usage: $prog -c service     # record seed for new service" >&2
     echo "usage: $prog -l" >&2
     exit 1
 }
@@ -26,34 +31,239 @@ EOF
 	;;
 esac
 
-case $0 in
-    */*)
-	dir=$(dirname $0)
-	;;
-    *)
-	dir=$(dirname $(command -v $0)) || exit 1
-	;;
-esac
+if ! self=$(command -v $0) || ! test -r "$self"; then
+    echo "Cannot find myself ($0)" >&2
+    exit 1;
+fi
 
-test -x "$dir/$exe.$suffix" -a "$dir/$exe.$suffix" -nt "$dir/$exe.c" \
-    || cc $(pkg-config --cflags --libs-only-other --libs-only-L openssl) \
-        -o "$dir/$exe.$suffix" "$dir/$exe.c" -lcrypto \
-    || exit 1
+if ! test "$bindir/$exe.$suffix" -nt "$self"; then
+    mkdir -p "$bindir"
+    sed -e '1,/^BEGIN CODE/d' "$self" > "$bindir/$exe.c"
+    cc -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
+      $(pkg-config --cflags --libs libcrypto) -Wall -g \
+	|| exit 1
+fi
 
 if test "$#" -eq 2; then
     umask 077
     if test -f "$keydir/$2.gpg"; then
-        echo "$keydir/$2.gpg exists already; please delete it."
-        exit 1
+	echo "$keydir/$2.gpg exists already; please delete it."
+	exit 1
     fi
     mkdir -p "$keydir"
     echo -n "Enter Base32-encoded authenticator key: "
     read key
-    echo "$key" | "$dir/$exe.$suffix" - 0 || exit 1
-    echo "$key" | sed -e 's/ //g' | gpg -c > "$keydir/$2.gpg" 2> /dev/null
+    key=$(echo "$key" | tr -d ' \t')
+    echo "key is $key."
+    echo "$key" | "$bindir/$exe.$suffix" - 0 || exit 1
+    echo "$key" | gpg -c > "$keydir/$2.gpg" 2> /dev/null
 elif test "$1" = "-l"; then
     ls "$keydir/" | sed "s/.gpg//"
 else
-    gpg --quiet --no-mdc-warning -d "$keydir/$1.gpg" | "$dir/$exe.$suffix" -
+    gpg --quiet --no-mdc-warning -d "$keydir/$1.gpg" | "$bindir/$exe.$suffix" -
 fi
+
+exit 0
+BEGIN CODE
+/* Google authenticator code calculation, link with -lcrypto */
+
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+
+char *progname;
+
+static const char b2a32[32] = {
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+  'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+  'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+  'Y', 'Z', '2', '3', '4', '5', '6', '7',
+};
+
+static const signed char a2b32[256] = {
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, 26, 27, 28, 29, 30, 31, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+  -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, 
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+};
+
+static const int b2a32rem[5] = {0, 2, 4, 5, 7};
+static const int a2b32rem[8] = {0, -1, 1, -1, 2, 3, -1, 4};
+
+ssize_t
+armor32len (const char *_s)
+{
+  const u_char *s = (const u_char *) _s;
+  const u_char *p = s;
+  ssize_t len;
+  while (a2b32[*p] >= 0)
+    p++;
+  len = p - s;
+  return a2b32rem[len & 7] < 0 ? -1 : len;
+}
+
+ssize_t
+dearmor32len (const char *s)
+{
+  ssize_t len = armor32len (s);
+  return len < 0 ? -1 : (len >> 3) * 5 + a2b32rem[len & 7];
+}
+
+ssize_t
+dearmor32 (void *out, const char *_s)
+{
+  const u_char *s = (const u_char *) _s;
+  ssize_t len = armor32len (_s);
+  int rem = a2b32rem [len & 7];
+  size_t outlen = (len >> 3) * 5 + rem;
+  char *d = out;
+  int c0, c1, c2, c3, c4, c5, c6, c7;
+  const u_char *e;
+
+  if (rem < 0)
+    return -1;
+  if (len <= 0)
+    return 0;
+
+  for (e = s + (len & ~7); s < e; s += 8, d += 5) {
+    c0 = a2b32[s[0]];
+    c1 = a2b32[s[1]];
+    d[0] = c0 << 3 | c1 >> 2;
+    c2 = a2b32[s[2]];
+    c3 = a2b32[s[3]];
+    d[1] = c1 << 6 | c2 << 1 | c3 >> 4;
+    c4 = a2b32[s[4]];
+    d[2] = c3 << 4 | c4 >> 1;
+    c5 = a2b32[s[5]];
+    c6 = a2b32[s[6]];
+    d[3] = c4 << 7 | c5 << 2 | c6 >> 3;
+    c7 = a2b32[s[7]];
+    d[4] = c6 << 5 | c7;
+  }
+
+  if (rem >= 1) {
+    c0 = a2b32[s[0]];
+    c1 = a2b32[s[1]];
+    *d++ = c0 << 3 | c1 >> 2;
+    if (rem >= 2) {
+      c2 = a2b32[s[2]];
+      c3 = a2b32[s[3]];
+      *d++ = c1 << 6 | c2 << 1 | c3 >> 4;
+      if (rem >= 3) {
+	c4 = a2b32[s[4]];
+	*d++ = c3 << 4 | c4 >> 1;
+	if (rem >= 4) {
+	  c5 = a2b32[s[5]];
+	  c6 = a2b32[s[6]];
+	  *d++ = c4 << 7 | c5 << 2 | c6 >> 3;
+	}
+      }
+    }
+  }
+
+  assert (d == (char *) out + outlen);
+  return len;
+}
+
+int
+dearmor32a (void **outp, size_t *outlen, char *in)
+{
+  if (armor32len (in) != strlen (in))
+    return 0;
+  dearmor32 ((*outp = malloc ((*outlen = dearmor32len (in)))), in);
+  return 1;
+}
+
+uint32_t
+hotp (const void *key, size_t keylen, unsigned long val)
+{
+  int i;
+  unsigned char valbytes[8];
+  unsigned char hash[20];
+  unsigned char *p;
+  for (i = 8; i--; val >>= 8)
+    valbytes[i] = val;
+  HMAC (EVP_sha1 (), key, keylen, valbytes, sizeof (valbytes), hash, NULL);
+  p = hash + (hash[sizeof (hash) - 1] & 0xf);
+  return ((p[0] & 0x7f) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
+}
+
+void
+usage (void)
+{
+  fprintf (stderr,
+	   "usage: %s <secret> [<val>]\n"
+	   "       %s - [<val>]\n",
+	   progname, progname);
+  exit (1);
+}
+
+int
+main (int argc, char **argv)
+{
+  char *keystr;
+  void *key;
+  size_t keylen;
+  unsigned long val;
+  uint32_t code;
+  char line[128] = "";
+
+  progname = strrchr (argv[0], '/');
+  if (!progname)
+    progname = argv[0];
+  else
+    progname++;
+  if (argc < 2 || argc > 3)
+    usage ();
+
+  if (strcmp (argv[1], "-"))
+    keystr = argv[1];
+  else {
+    int n;
+    fgets (line, sizeof (line), stdin);
+    n = strlen (line);
+    if (n > 0 && line[n - 1] == '\n')
+      line[n - 1] = '\0';
+    else if (n + 1 == sizeof (line)) {
+      fprintf (stderr, "%s: input too long\n", progname);
+      exit (1);
+    }
+    else if (n == 0) {
+      /* If gpg or something fails on input.  But allow null key with \n. */
+      fprintf (stderr, "%s: aborted\n", progname);
+      exit (1);
+    }
+    keystr = line;
+  }
+  if (!dearmor32a (&key, &keylen, keystr)) {
+    fprintf (stderr, "%s: bad key\n", progname);
+    exit (1);
+  }
+
+  if (argc == 3)
+    val = strtoul (argv[2], NULL, 0);
+  else
+    val = (unsigned long) time (NULL) / 30;
+
+  code = hotp (key, keylen, val);
+  printf ("%06ld\n", (unsigned long) code % 1000000);
+
+  return 0;
+}
 
