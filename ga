@@ -1,0 +1,59 @@
+#!/bin/sh
+
+exe=google-auth-code
+suffix=$(uname -sm | sed -e 's/ /-/g')
+prog=$(basename $0)
+keydir="${XDG_CONFIG_HOME-${HOME}/.config}/ga"
+
+usage() {
+    echo "usage: $prog service" >&2
+    echo "usage: $prog -c service" >&2
+    echo "usage: $prog -l" >&2
+    exit 1
+}
+
+test "$#" -eq 1 -o "$#" -eq 2 -a "$1" = "-c" || usage
+
+case $(gsettings get org.gnome.crypto.cache gpg-cache-method 2>/dev/null) in
+    "'idle'"|"'timeout'"|"")
+	;;
+    *)
+	cat >&2 <<EOF
+WARNING:  gnome-keyring-daemon is not configured to forget passwords.
+          It is strongly suggested that you run the following command:
+          gsettings set org.gnome.crypto.cache gpg-cache-method idle
+EOF
+	;;
+esac
+
+case $0 in
+    */*)
+	dir=$(dirname $0)
+	;;
+    *)
+	dir=$(dirname $(command -v $0)) || exit 1
+	;;
+esac
+
+test -x "$dir/$exe.$suffix" -a "$dir/$exe.$suffix" -nt "$dir/$exe.c" \
+    || cc $(pkg-config --cflags --libs-only-other --libs-only-L openssl) \
+        -o "$dir/$exe.$suffix" "$dir/$exe.c" -lcrypto \
+    || exit 1
+
+if test "$#" -eq 2; then
+    umask 077
+    if test -f "$keydir/$2.gpg"; then
+        echo "$keydir/$2.gpg exists already; please delete it."
+        exit 1
+    fi
+    mkdir -p "$keydir"
+    echo -n "Enter Base32-encoded authenticator key: "
+    read key
+    echo "$key" | "$dir/$exe.$suffix" - 0 || exit 1
+    echo "$key" | sed -e 's/ //g' | gpg -c > "$keydir/$2.gpg" 2> /dev/null
+elif test "$1" = "-l"; then
+    ls "$keydir/" | sed "s/.gpg//"
+else
+    gpg --quiet --no-mdc-warning -d "$keydir/$1.gpg" | "$dir/$exe.$suffix" -
+fi
+
