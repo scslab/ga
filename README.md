@@ -18,9 +18,12 @@ uncompiled, then `ga` knows how to compile it on-demmand.
 
 ## Using
 
-usage: gaa service        # get token for service
-usage: gaa -c service     # record seed for new service
-usage: gaa -l             # list services setup
+usage:
+```
+gaa service        # get token for service
+gaa -c service     # record seed for new service
+gaa -l             # list services setup
+```
 
 ## Get involved!
 
