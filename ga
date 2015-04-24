@@ -49,25 +49,25 @@ usage() {
 
 case "$1" in
     -x)
-  shift
-  unset DISPLAY
-  ;;
+	shift
+	unset DISPLAY
+	;;
     -x*)
-  unset DISPLAY
-  ;;
+	unset DISPLAY
+	;;
 esac
 test "$#" -ge 1 -a "$#" -le 2 || usage
 
 case $(gsettings get org.gnome.crypto.cache gpg-cache-method 2>/dev/null) in
     "'idle'"|"'timeout'"|"")
-  ;;
+	;;
     *)
-  cat >&2 <<EOF
+	cat >&2 <<EOF
 WARNING:  gnome-keyring-daemon is not configured to forget passwords.
           It is strongly suggested that you run the following command:
           gsettings set org.gnome.crypto.cache gpg-cache-method idle
 EOF
-  ;;
+	;;
 esac
 
 if ! self=$(command -v $0) || ! test -r "$self"; then
@@ -79,8 +79,8 @@ if ! test "$bindir/$exe.$suffix" -nt "$self"; then
     mkdir -p "$bindir"
     sed -e '1,/^BEGIN CODE/d' "$self" > "$bindir/$exe.c"
     cc $(pkg-config --cflags --libs libcrypto) -Wall -g \
-          -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
-  || exit 1
+	        -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
+	|| exit 1
 fi
 
 if test "$#" -eq 1 -a x"$1" != x"-l"; then
@@ -93,85 +93,85 @@ fi
 
 gk() {
     while read line; do
-  nosecret="${line%%\?*}"
-  account="${nosecret#QR-Code:otpauth://totp/}"
-  if test x"$nosecret" != x"$account"; then
-      echo -n "Use $account? (y) " > /dev/tty
-      read ans < /dev/tty
-      if test x"$ans" = x -o y = "$ans" -o yes = "$ans"; then
-    echo "${line#QR-Code:}"
-    return
-      fi
-  fi
+	nosecret="${line%%\?*}"
+	account="${nosecret#QR-Code:otpauth://totp/}"
+	if test x"$nosecret" != x"$account"; then
+	    echo -n "Use $account? (y) " > /dev/tty
+	    read ans < /dev/tty
+	    if test x"$ans" = x -o y = "$ans" -o yes = "$ans"; then
+		echo "${line#QR-Code:}"
+		return
+	    fi
+	fi
     done
 }
 
 case "$mode" in
     "")
-  if code=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg" \
-       | "$bindir/$exe.$suffix" -); then
-      if test -n "$DISPLAY" && command -v xclip > /dev/null; then
-    echo "Sending code to X clipboard"
-    echo -n "$code" | xclip -i
-      else
-    echo "$code"
-      fi
-  else
-      exit 1
-  fi
-  ;;
+	if code=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg" \
+			 | "$bindir/$exe.$suffix" -); then
+	    if test -n "$DISPLAY" && command -v xclip > /dev/null; then
+		echo "Sending code to X clipboard"
+		echo -n "$code" | xclip -i
+	    else
+		echo "$code"
+	    fi
+	else
+	    exit 1
+	fi
+	;;
     -c|-xc)
-  umask 077
-  if test -f "$keydir/$target.gpg"; then
-      echo "$keydir/$target.gpg exists already; please delete it."
-      exit 1
-  fi
-  mkdir -p "$keydir"
-  unset key
-  if test -n "$DISPLAY"; then
-      key=$(xwd -silent -root | zbarimg /dev/stdin 2> /dev/null | gk)
-  fi
-  if test -z "$key"; then
-      echo -n "Enter Base32-encoded authenticator key: "
-      read key
-      if test -z "$key"; then
-    echo "Aborted."
-    exit 0
-      fi
-  fi
-      echo "key is $key."
+	umask 077
+	if test -f "$keydir/$target.gpg"; then
+	    echo "$keydir/$target.gpg exists already; please delete it."
+	    exit 1
+	fi
+	mkdir -p "$keydir"
+	unset key
+	if test -n "$DISPLAY"; then
+	    key=$(xwd -silent -root | zbarimg /dev/stdin 2> /dev/null | gk)
+	fi
+	if test -z "$key"; then
+	    echo -n "Enter Base32-encoded authenticator key: "
+	    read key
+	    if test -z "$key"; then
+		echo "Aborted."
+		exit 0
+	    fi
+	fi
+	    echo "key is $key."
 
-  echo "$key" | "$bindir/$exe.$suffix" - 0 || exit 1
-  echo "$key" | gpg -q -c -o "$keydir/$2.gpg"
-  ;;
+	echo "$key" | "$bindir/$exe.$suffix" - 0 || exit 1
+	echo "$key" | gpg -q -c -o "$keydir/$2.gpg"
+	;;
     -v|-xv)
-  secret=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg") || exit 1
-  case "$secret" in
-      otpauth://totp/*)
-          ;;
-      *)
-    secret="otpauth://totp/$target?secret=$secret&issuer=$target"
-          ;;
-  esac
-  if test -z "$DISPLAY"; then
-      echo -n "$secret" | qrencode -t ansi
-  elif command -v display > /dev/null; then
-      echo -n "$secret" | qrencode -o- | display -
-  elif command -v xv > /dev/null; then
-      echo -n "$secret" | qrencode -o- | xv -
-  elif command -v xloadimage > /dev/null; then
-      echo -n "$secret" | qrencode -o- | xloadimage stdin
-  else
-      echo "$prog: cannot display images, try -xv option" >&2
-      exit 1
-  fi
-  ;;
+	secret=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg") || exit 1
+	case "$secret" in
+	    otpauth://totp/*)
+	        ;;
+	    *)
+		secret="otpauth://totp/$target?secret=$secret&issuer=$target"
+	        ;;
+	esac
+	if test -z "$DISPLAY"; then
+	    echo -n "$secret" | qrencode -t ansi
+	elif command -v display > /dev/null; then
+	    echo -n "$secret" | qrencode -o- | display -
+	elif command -v xv > /dev/null; then
+	    echo -n "$secret" | qrencode -o- | xv -
+	elif command -v xloadimage > /dev/null; then
+	    echo -n "$secret" | qrencode -o- | xloadimage stdin
+	else
+	    echo "$prog: cannot display images, try -xv option" >&2
+	    exit 1
+	fi
+	;;
     -l)
-  ls "$keydir/" | sed "s/.gpg//"
-  ;;
+	ls "$keydir/" | sed -ne "s/.gpg$//p"
+	;;
     *)
-  usage
-  ;;
+	usage
+	;;
 esac
 
 exit 0
@@ -274,13 +274,13 @@ dearmor32 (void *out, const char *_s)
       c3 = a2b32[s[3]];
       *d++ = c1 << 6 | c2 << 1 | c3 >> 4;
       if (rem >= 3) {
-  c4 = a2b32[s[4]];
-  *d++ = c3 << 4 | c4 >> 1;
-  if (rem >= 4) {
-    c5 = a2b32[s[5]];
-    c6 = a2b32[s[6]];
-    *d++ = c4 << 7 | c5 << 2 | c6 >> 3;
-  }
+	c4 = a2b32[s[4]];
+	*d++ = c3 << 4 | c4 >> 1;
+	if (rem >= 4) {
+	  c5 = a2b32[s[5]];
+	  c6 = a2b32[s[6]];
+	  *d++ = c4 << 7 | c5 << 2 | c6 >> 3;
+	}
       }
     }
   }
@@ -363,9 +363,9 @@ void
 usage (void)
 {
   fprintf (stderr,
-     "usage: %s <secret> [<val>]\n"
-     "       %s - [<val>]\n",
-     progname, progname);
+	   "usage: %s <secret> [<val>]\n"
+	   "       %s - [<val>]\n",
+	   progname, progname);
   exit (1);
 }
 
