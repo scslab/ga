@@ -1,8 +1,36 @@
 #!/bin/sh
 
+# ga - manage Google authenticator (RFC6238) seeds
+#
 # Copyright 2014 David Mazieres.  You may use and distribute this code
 # under the terms of the GPLv3 or later, and additionally you may link
 # against openssl libcrypto.
+#
+# This program comes with ABSOLUTELY NO WARRANTY.  This program
+# REDUCES YOUR SECURITY by making two-factor authentication not really
+# two factor.  You may decide using this program is useful where the
+# alternative is only one factor authentication, but that is your
+# decision alone.  The author DOES NOT REPRESENT THIS SOFTWARE AS MORE
+# SECURE THAN ANY ALTERNATIVE; it most likely is less secure.
+
+# Installation:
+#   Just put it somewhere on your path (e.g., $HOME/bin/ga).
+#
+# Requirements:
+#   gnupg
+#
+# Optional dependencies:
+#   xclip - to send login codes to the X clipboard instead of stdout
+#   xorg-xwd, zbar - to parse QR codes from screen with -c option
+#   qrencode, imagemagick - to display QR codes with -v option
+
+# Tip: If you need to retrieve seeds from an android phone, try
+# running the following command as root on your phone:
+#
+# sqlite3 -header \
+#   /data/data/com.google.android.apps.authenticator2/databases/databases \
+#   'SELECT email, secret FROM accounts;'
+
 
 exe=google-auth-code
 suffix=$(uname -sm | sed -e 's/ /-/g')
@@ -11,24 +39,34 @@ keydir="${XDG_CONFIG_HOME-${HOME}/.config}/ga"
 bindir="$keydir/bin"
 
 usage() {
-    echo "usage: $prog service        # get token for service" >&2
-    echo "usage: $prog -c service     # record seed for new service" >&2
-    echo "usage: $prog -l             # list services setup" >&2
+    echo "usage: $prog [-x] service     # get token for service" >&2
+    echo "       $prog -[x]c service    # record seed for new service" >&2
+    echo "       $prog -[x]v service    # view qrcode for service" >&2
+    echo "(The -x* flags disable use of X11 even when \$DISPLAY is set.)" >&2
     exit 1
 }
 
-test "$#" -eq 1 -o "$#" -eq 2 -a "$1" = "-c" || usage
+case "$1" in
+    -x)
+  shift
+  unset DISPLAY
+  ;;
+    -x*)
+  unset DISPLAY
+  ;;
+esac
+test "$#" -ge 1 -a "$#" -le 2 || usage
 
 case $(gsettings get org.gnome.crypto.cache gpg-cache-method 2>/dev/null) in
     "'idle'"|"'timeout'"|"")
-	;;
+  ;;
     *)
-	cat >&2 <<EOF
+  cat >&2 <<EOF
 WARNING:  gnome-keyring-daemon is not configured to forget passwords.
           It is strongly suggested that you run the following command:
           gsettings set org.gnome.crypto.cache gpg-cache-method idle
 EOF
-	;;
+  ;;
 esac
 
 if ! self=$(command -v $0) || ! test -r "$self"; then
@@ -39,29 +77,98 @@ fi
 if ! test "$bindir/$exe.$suffix" -nt "$self"; then
     mkdir -p "$bindir"
     sed -e '1,/^BEGIN CODE/d' "$self" > "$bindir/$exe.c"
-    cc -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
-      $(pkg-config --cflags --libs libcrypto) -Wall -g \
-	|| exit 1
+    cc $(pkg-config --cflags --libs libcrypto) -Wall -g \
+          -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
+  || exit 1
 fi
 
-if test "$#" -eq 2; then
-    umask 077
-    if test -f "$keydir/$2.gpg"; then
-	echo "$keydir/$2.gpg exists already; please delete it."
-	exit 1
-    fi
-    mkdir -p "$keydir"
-    echo -n "Enter Base32-encoded authenticator key: "
-    read key
-    key=$(echo "$key" | tr -d ' \t')
-    echo "key is $key."
-    echo "$key" | "$bindir/$exe.$suffix" - 0 || exit 1
-    echo "$key" | gpg -c > "$keydir/$2.gpg" 2> /dev/null
-elif test "$1" = "-l"; then
-    ls "$keydir/" | sed "s/.gpg//"
+if test "$#" -eq 1; then
+    mode=""
+    target="$1"
 else
-    gpg --quiet --no-mdc-warning -d "$keydir/$1.gpg" | "$bindir/$exe.$suffix" -
+    mode="$1"
+    target="$2"
 fi
+
+gk() {
+    while read line; do
+  nosecret="${line%%\?*}"
+  account="${nosecret#QR-Code:otpauth://totp/}"
+  if test x"$nosecret" != x"$account"; then
+      echo -n "Use $account? (y) " > /dev/tty
+      read ans < /dev/tty
+      if test x"$ans" = x -o y = "$ans" -o yes = "$ans"; then
+    echo "${line#QR-Code:}"
+    return
+      fi
+  fi
+    done
+}
+
+case "$mode" in
+    "")
+  if code=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg" \
+       | "$bindir/$exe.$suffix" -); then
+      if test -n "$DISPLAY" && command -v xclip > /dev/null; then
+    echo "Sending code to X clipboard"
+    echo -n "$code" | xclip -i
+      else
+    echo "$code"
+      fi
+  else
+      exit 1
+  fi
+  ;;
+    -c|-xc)
+  umask 077
+  if test -f "$keydir/$target.gpg"; then
+      echo "$keydir/$target.gpg exists already; please delete it."
+      exit 1
+  fi
+  mkdir -p "$keydir"
+  unset key
+  if test -n "$DISPLAY"; then
+      key=$(xwd -silent -root | zbarimg /dev/stdin 2> /dev/null | gk)
+  fi
+  if test -z "$key"; then
+      echo -n "Enter Base32-encoded authenticator key: "
+      read key
+      if test -z "$key"; then
+    echo "Aborted."
+    exit 0
+      fi
+  fi
+      echo "key is $key."
+
+  echo "$key" | "$bindir/$exe.$suffix" - 0 || exit 1
+  echo "$key" | gpg -q -c -o "$keydir/$2.gpg"
+  ;;
+    -v|-xv)
+  secret=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg") || exit 1
+  case "$secret" in
+      otpauth://totp/*)
+          ;;
+      *)
+    secret="otpauth://totp/$target?secret=$secret&issuer=$target"
+          ;;
+  esac
+  if test -z "$DISPLAY"; then
+      echo -n "$secret" | qrencode -t ansi
+  elif command -v display > /dev/null; then
+      echo -n "$secret" | qrencode -o- | display -
+  elif command -v xv > /dev/null; then
+      echo -n "$secret" | qrencode -o- | xv -
+  elif command -v xloadimage > /dev/null; then
+      echo -n "$secret" | qrencode -o- | xloadimage stdin
+  else
+      echo "$prog: cannot display images, try -xv option" >&2
+      exit 1
+  fi
+  ;;
+    *)
+  usage
+  ;;
+esac
 
 exit 0
 BEGIN CODE
@@ -166,13 +273,13 @@ dearmor32 (void *out, const char *_s)
       c3 = a2b32[s[3]];
       *d++ = c1 << 6 | c2 << 1 | c3 >> 4;
       if (rem >= 3) {
-	c4 = a2b32[s[4]];
-	*d++ = c3 << 4 | c4 >> 1;
-	if (rem >= 4) {
-	  c5 = a2b32[s[5]];
-	  c6 = a2b32[s[6]];
-	  *d++ = c4 << 7 | c5 << 2 | c6 >> 3;
-	}
+  c4 = a2b32[s[4]];
+  *d++ = c3 << 4 | c4 >> 1;
+  if (rem >= 4) {
+    c5 = a2b32[s[5]];
+    c6 = a2b32[s[6]];
+    *d++ = c4 << 7 | c5 << 2 | c6 >> 3;
+  }
       }
     }
   }
@@ -204,13 +311,56 @@ hotp (const void *key, size_t keylen, unsigned long val)
   return ((p[0] & 0x7f) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
 }
 
+static const char *
+findsecret(const char *in)
+{
+  static const char totp[] = "otpauth://totp/";
+  static const char qsecret[] = "?secret=";
+  static const char asecret[] = "&secret=";
+  const char *start;
+  if (strncmp (in, totp, sizeof(totp) - 1))
+    return in;
+  if ((start = strstr(in, qsecret)))
+    return start + sizeof(qsecret) - 1;
+  if ((start = strstr(in, asecret)))
+    return start + sizeof(asecret) - 1;
+  return start;
+}
+
+char *
+getsecret(const char *in)
+{
+  size_t pos = 0;
+  char *ret = malloc(pos+1);
+  if (!ret)
+    return NULL;
+  *ret = '\0';
+
+  if (!(in = findsecret (in)))
+    return NULL;
+  
+  for(; *in != '&'; ++in) {
+    char *tmp = ret;
+    if (*in == ' ' || *in == '\t')
+      continue;
+    if (!(ret = realloc (ret, ++pos + 1))) {
+      free (tmp);
+      return NULL;
+    }
+    ret[pos-1] = *in;
+    if (!*in)
+      break;
+  }
+  return ret;
+}
+
 void
 usage (void)
 {
   fprintf (stderr,
-	   "usage: %s <secret> [<val>]\n"
-	   "       %s - [<val>]\n",
-	   progname, progname);
+     "usage: %s <secret> [<val>]\n"
+     "       %s - [<val>]\n",
+     progname, progname);
   exit (1);
 }
 
@@ -251,7 +401,9 @@ main (int argc, char **argv)
     }
     keystr = line;
   }
-  if (!dearmor32a (&key, &keylen, keystr)) {
+
+  if (!(keystr = getsecret(keystr))
+      || !dearmor32a (&key, &keylen, keystr)) {
     fprintf (stderr, "%s: bad key\n", progname);
     exit (1);
   }
@@ -266,4 +418,3 @@ main (int argc, char **argv)
 
   return 0;
 }
-

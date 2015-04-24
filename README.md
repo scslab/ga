@@ -9,21 +9,30 @@ that are compatible with Google Authenticator from the shell.
 
 ## Licensing
 
-This library is BSD-licensed.
+This library is GPLv3-licensed.
 
 ## Installing
 
-Just install on your path both files. If google-auth-code.c is
-uncompiled, then `ga` knows how to compile it on-demmand.
+Just install on your path both files.
+
+Requirements:
+* gnupg
+
+Optional dependencies:
+* xclip - to send login codes to the X clipboard instead of stdout
+* xorg-xwd, zbar - to parse QR codes from screen with -c option
+* qrencode, imagemagick - to display QR codes with -v option
 
 ## Using
 
-usage:
 ```
-gaa service        # get token for service
-gaa -c service     # record seed for new service
-gaa -l             # list services setup
+ga [-x]  service   # get token for service
+ga -[x]c service   # record seed for new service
+ga -[x]v service   # view qrcode for service
+ga -l              # list services setup
 ```
+
+The `-x*` flags disable use of X11 even when `$DISPLAY` is set.
 
 ## Get involved!
 
