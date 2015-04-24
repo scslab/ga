@@ -42,6 +42,7 @@ usage() {
     echo "usage: $prog [-x] service     # get token for service" >&2
     echo "       $prog -[x]c service    # record seed for new service" >&2
     echo "       $prog -[x]v service    # view qrcode for service" >&2
+    echo "       $prog -l               # list services setup" >&2
     echo "(The -x* flags disable use of X11 even when \$DISPLAY is set.)" >&2
     exit 1
 }
@@ -82,7 +83,7 @@ if ! test "$bindir/$exe.$suffix" -nt "$self"; then
   || exit 1
 fi
 
-if test "$#" -eq 1; then
+if test "$#" -eq 1 -a x"$1" != x"-l"; then
     mode=""
     target="$1"
 else
@@ -164,6 +165,9 @@ case "$mode" in
       echo "$prog: cannot display images, try -xv option" >&2
       exit 1
   fi
+  ;;
+    -l)
+  ls "$keydir/" | sed "s/.gpg//"
   ;;
     *)
   usage
