@@ -186,6 +186,11 @@ BEGIN CODE
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 
+#ifdef __APPLE__
+#include <Availability.h>
+#include <CommonCrypto/CommonHMAC.h>
+#endif
+
 char *progname;
 
 static const signed char a2b32[256] = {
@@ -302,7 +307,11 @@ hotp (const void *key, size_t keylen, unsigned long val)
   unsigned char *p;
   for (i = 8; i--; val >>= 8)
     valbytes[i] = val;
+#ifdef __MAC_10_7
+  CCHmac (kCCHmacAlgSHA1, key, keylen, valbytes, sizeof (valbytes), hash);
+#else
   HMAC (EVP_sha1 (), key, keylen, valbytes, sizeof (valbytes), hash, NULL);
+#endif
   p = hash + (hash[sizeof (hash) - 1] & 0xf);
   return ((p[0] & 0x7f) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
 }
