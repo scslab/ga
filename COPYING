@@ -1,0 +1,13 @@
+
+Copyright 2014-2015 David Mazi&egrave;res.  You may use and distribute
+this code under the terms of the GPLv3 or later (available from
+<http://www.gnu.org/licenses/gpl-3.0.html>), and additionally you may
+link against openssl libcrypto.
+
+This program comes with ABSOLUTELY NO WARRANTY.  This program REDUCES
+YOUR SECURITY by making two-factor authentication not really two
+factor.  You may decide using this program is useful where the
+alternative is only one factor authentication, but that is your
+decision alone.  The author DOES NOT REPRESENT THIS SOFTWARE AS MORE
+SECURE THAN ANY ALTERNATIVE; it most likely is less secure.
+
