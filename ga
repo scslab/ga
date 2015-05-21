@@ -113,6 +113,9 @@ case "$mode" in
 	    if test -n "$DISPLAY" && command -v xclip > /dev/null; then
 		echo "Sending code to X clipboard"
 		echo -n "$code" | xclip -i
+	    if test -n "$DISPLAY" && command -v xsel > /dev/null; then
+		echo "Sending code to X clipboard"
+		echo -n "$code" | xsel -i
 	    else
 		echo "$code"
 	    fi
