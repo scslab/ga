@@ -342,7 +342,6 @@ getsecret(const char *in)
   char *ret = malloc(pos+1);
   if (!ret)
     return NULL;
-  *ret = '\0';
 
   if (!(in = findsecret (in)))
     return NULL;
@@ -359,6 +358,7 @@ getsecret(const char *in)
     if (!*in)
       break;
   }
+  ret[pos] = '\0';
   return ret;
 }
 
