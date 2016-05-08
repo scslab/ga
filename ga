@@ -184,15 +184,18 @@ BEGIN CODE
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
+#include <time.h>
 
 #ifdef __APPLE__
 #include <Availability.h>
 #include <CommonCrypto/CommonHMAC.h>
+#else
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
 #endif
 
 char *progname;
@@ -311,7 +314,7 @@ hotp (const void *key, size_t keylen, unsigned long val)
   unsigned char *p;
   for (i = 8; i--; val >>= 8)
     valbytes[i] = val;
-#ifdef __MAC_10_7
+#ifdef __APPLE__
   CCHmac (kCCHmacAlgSHA1, key, keylen, valbytes, sizeof (valbytes), hash);
 #else
   HMAC (EVP_sha1 (), key, keylen, valbytes, sizeof (valbytes), hash, NULL);
