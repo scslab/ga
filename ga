@@ -78,8 +78,9 @@ fi
 if ! test "$bindir/$exe.$suffix" -nt "$self"; then
     mkdir -p "$bindir"
     sed -e '1,/^BEGIN CODE/d' "$self" > "$bindir/$exe.c"
-    cc $(pkg-config --cflags --libs libcrypto) -Wall -g \
+    cc $(pkg-config --cflags libcrypto) -Wall -g \
 	        -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
+          $(pkg-config --libs libcrypto) \
 	|| exit 1
 fi
 
