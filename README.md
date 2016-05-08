@@ -33,6 +33,21 @@ Optional dependencies:
 The `-x`, `-xc`, and `-xv` flags disable use of X11 even when
 `$DISPLAY` is set, compared to no option, `-c`, and `-v`.
 
+## OS X and GPG Tools
+
+Mac OS X users may be using the [GPG Tools](https://gpgtools.org/)
+distribution. For some strange reason, this package doesn't detect when you are
+running in a terminal session without a display (e.g., SSH), so by default, it
+always launches a GUI for key entry. Which makes `ga` impossible to use over
+SSH on OS X.
+
+To fix this, you'll want to tell it to uses a curses display for passpharse entry:
+
+    export PINENTRY_USER_DATA="USE_CURSES=1"
+
+A good way to decide when to export this variable is by detecting it
+`SSH_CONNECTION` is a non-empty string.
+
 ## Get involved!
 
 We are happy to receive bug reports, fixes, documentation enhancements,
