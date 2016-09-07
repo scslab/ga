@@ -20,7 +20,7 @@ Requirements:
 Optional dependencies:
 
 * xclip - to send login codes to the X clipboard instead of stdout
-* xorg-xwd, zbar - to parse QR codes from screen with -c option
+* zbar - to parse QR codes from screen with -c option
 * qrencode, imagemagick - to display QR codes with -v option
 
 ## Using
@@ -36,12 +36,13 @@ The `-x`, `-xc`, and `-xv` flags disable use of X11 even when
 ## OS X and GPG Tools
 
 Mac OS X users may be using the [GPG Tools](https://gpgtools.org/)
-distribution. For some strange reason, this package doesn't detect when you are
-running in a terminal session without a display (e.g., SSH), so by default, it
-always launches a GUI for key entry. Which makes `ga` impossible to use over
-SSH on OS X.
+distribution. For some strange reason, this package doesn't detect
+when you are running in a terminal session without a display (e.g.,
+SSH), so by default, it always launches a GUI for key entry. Which
+makes `ga` impossible to use over SSH on OS X.
 
-To fix this, you'll want to tell it to uses a curses display for passpharse entry:
+To fix this, you'll want to tell it to uses a curses display for
+passpharse entry:
 
     export PINENTRY_USER_DATA="USE_CURSES=1"
 

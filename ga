@@ -21,7 +21,7 @@
 #
 # Optional dependencies:
 #   xclip - to send login codes to the X clipboard instead of stdout
-#   xorg-xwd, zbar - to parse QR codes from screen with -c option
+#   zbar - to parse QR codes from screen with -c option
 #   qrencode, imagemagick - to display QR codes with -v option
 
 # Tip: If you need to retrieve seeds from an android phone, try
@@ -133,7 +133,7 @@ case "$mode" in
 	mkdir -p "$keydir"
 	unset key
 	if test -n "$DISPLAY"; then
-	    key=$(xwd -silent -root | zbarimg /dev/stdin 2> /dev/null | gk)
+	    key=$(zbarimg x:root 2> /dev/null | gk)
 	fi
 	if test -z "$key"; then
 	    echo -n "Enter Base32-encoded authenticator key: "
