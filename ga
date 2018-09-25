@@ -158,13 +158,13 @@ case "$mode" in
                 ;;
         esac
         if test -z "$DISPLAY"; then
-            echo -n "$secret" | qrencode -t ansi
+            echo -n "$secret" | tr -d ' ' | qrencode -t ansi
         elif command -v display > /dev/null; then
-            echo -n "$secret" | qrencode -o- | display -
+            echo -n "$secret" | tr -d ' ' | qrencode -o- | display -
         elif command -v xv > /dev/null; then
-            echo -n "$secret" | qrencode -o- | xv -
+            echo -n "$secret" | tr -d ' ' | qrencode -o- | xv -
         elif command -v xloadimage > /dev/null; then
-            echo -n "$secret" | qrencode -o- | xloadimage stdin
+            echo -n "$secret" | tr -d ' ' | qrencode -o- | xloadimage stdin
         else
             echo "$prog: cannot display images, try -xv option" >&2
             exit 1
