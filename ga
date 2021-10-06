@@ -20,7 +20,8 @@
 #   gnupg
 #
 # Optional dependencies:
-#   xclip - to send login codes to the X clipboard instead of stdout
+#   xclip, xsel - to send login codes to the X clipboard instead of stdout
+#   pbcopy - to send login codes to the OSX clipboard instaed of stdout
 #   zbar - to parse QR codes from screen with -c option
 #   qrencode, imagemagick - to display QR codes with -v option
 
@@ -37,6 +38,8 @@ suffix=$(uname -sm | sed -e 's/ /-/g')
 prog=$(basename $0)
 keydir="${XDG_CONFIG_HOME-${HOME}/.config}/ga"
 bindir="$keydir/bin"
+gpgcmd="gpg"
+gpgoptions="--pinentry-mode loopback -q --no-mdc-warning"
 
 usage() {
     echo "usage: $prog [-x] service     # get token for service" >&2
@@ -46,6 +49,10 @@ usage() {
     echo "(The -x* flags disable use of X11 even when \$DISPLAY is set.)" >&2
     exit 1
 }
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  export DISPLAY="<OSX>"
+fi
 
 case "$1" in
     -x)
@@ -78,7 +85,11 @@ fi
 if ! test "$bindir/$exe.$suffix" -nt "$self"; then
     mkdir -p "$bindir"
     sed -e '1,/^BEGIN CODE/d' "$self" > "$bindir/$exe.c"
-    cc $(pkg-config --cflags libcrypto) -Wall -g \
+    cc_cmd=cc
+    if test -n "$CC"; then
+      cc_cmd=$CC
+    fi
+    $cc_cmd $(pkg-config --cflags libcrypto) -Wall -g \
                 -o "$bindir/$exe.$suffix" "$bindir/$exe.c" \
           $(pkg-config --libs libcrypto) \
         || exit 1
@@ -109,7 +120,7 @@ gk() {
 
 case "$mode" in
     "")
-        if code=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg" \
+        if code=$($gpgcmd $gpgoptions -d "$keydir/$target.gpg" \
                          | "$bindir/$exe.$suffix" -); then
             if test -n "$DISPLAY" && command -v xclip > /dev/null; then
                 echo "Sending code to X clipboard"
@@ -117,6 +128,9 @@ case "$mode" in
             elif test -n "$DISPLAY" && command -v xsel > /dev/null; then
                 echo "Sending code to X clipboard"
                 echo -n "$code" | xsel -i
+            elif test -n "$DISPLAY" && command -v pbcopy > /dev/null; then
+                echo "Sending code to OSX clipboard"
+                printf "$code" | pbcopy
             else
                 echo "$code"
             fi
@@ -146,10 +160,10 @@ case "$mode" in
             echo "key is $key."
 
         echo "$key" | "$bindir/$exe.$suffix" - 0 || exit 1
-        echo "$key" | gpg -q -c -o "$keydir/$2.gpg"
+        echo "$key" | $gpgcmd $gpgoptions -c -o "$keydir/$2.gpg"
         ;;
     -v|-xv)
-        secret=$(gpg -q --no-mdc-warning -d "$keydir/$target.gpg") || exit 1
+        secret=$($gpgcmd $gpgoptions -d "$keydir/$target.gpg") || exit 1
         case "$secret" in
             otpauth://totp/*)
                 ;;
@@ -158,16 +172,15 @@ case "$mode" in
                 ;;
         esac
         if test -z "$DISPLAY"; then
-            echo -n "$secret" | tr -d ' ' | qrencode -t ansi
+            printf "$secret" | tr -d ' ' | qrencode -t ansi
         elif command -v display > /dev/null; then
-            echo -n "$secret" | tr -d ' ' | qrencode -o- | display -
+            printf "$secret" | tr -d ' ' | qrencode -o- | display -
         elif command -v xv > /dev/null; then
-            echo -n "$secret" | tr -d ' ' | qrencode -o- | xv -
+            printf "$secret" | tr -d ' ' | qrencode -o- | xv -
         elif command -v xloadimage > /dev/null; then
-            echo -n "$secret" | tr -d ' ' | qrencode -o- | xloadimage stdin
+            printf "$secret" | tr -d ' ' | qrencode -o- | xloadimage stdin
         else
-            echo "$prog: cannot display images, try -xv option" >&2
-            exit 1
+            printf "$secret" | tr -d ' ' | qrencode -t ansi
         fi
         ;;
     -l)
